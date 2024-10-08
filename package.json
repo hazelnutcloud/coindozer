@@ -1,0 +1,8 @@
+{
+  "name": "coindozer",
+  "private": true,
+  "workspaces": ["frontend"],
+  "dependencies": {
+    "@dimforge/rapier3d": "^0.14.0"
+  }
+}
