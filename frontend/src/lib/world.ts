@@ -1,4 +1,4 @@
-import type { Vector3Like } from 'three';
+import type { Quaternion, Vector3 } from '@dimforge/rapier3d';
 
 type Rapier = Awaited<typeof import('@dimforge/rapier3d')>;
 
@@ -6,19 +6,27 @@ export interface CoinDozerWorldConfig {
 	fps: number;
 	containerCuboids: {
 		size: { width: number; height: number; depth: number };
-		position: Vector3Like;
+		position: Vector3;
 	}[];
 	coinSize: { halfHeight: number; radius: number };
 }
 
 export const PHYSICS_SCALING_FACTOR = 100;
 
+export interface CoinState {
+	translation: Vector3;
+	rotation: Quaternion;
+}
+
 export class CoinDozerWorld {
 	rapier: Rapier;
 	world: InstanceType<Rapier['World']>;
-	frame = 0;
 	config: CoinDozerWorldConfig;
-	coins: InstanceType<Rapier['RigidBody']>[] = [];
+	frame = 0;
+	accumulator = 0;
+	prevCoinStates: CoinState[] = [];
+	currentCoinStates: CoinState[] = [];
+	coinBodies: InstanceType<Rapier['RigidBody']>[] = [];
 	interval?: number;
 
 	constructor(rapier: Rapier, config: CoinDozerWorldConfig) {
@@ -46,9 +54,11 @@ export class CoinDozerWorld {
 	}
 
 	addCoin() {
-		const bodyDesc = this.rapier.RigidBodyDesc.dynamic()
-			.setTranslation(0, 10 / PHYSICS_SCALING_FACTOR, 0)
-			// .setCcdEnabled(true)
+		const bodyDesc = this.rapier.RigidBodyDesc.dynamic().setTranslation(
+			0,
+			10 / PHYSICS_SCALING_FACTOR,
+			0
+		);
 		const body = this.world.createRigidBody(bodyDesc);
 
 		const collider = this.rapier.ColliderDesc.cylinder(
@@ -57,7 +67,11 @@ export class CoinDozerWorld {
 		);
 		this.world.createCollider(collider, body);
 
-		this.coins.push(body);
+		this.coinBodies.push(body);
+		this.currentCoinStates.push({
+			rotation: body.rotation(),
+			translation: body.translation()
+		});
 	}
 
 	#setup() {
@@ -79,6 +93,13 @@ export class CoinDozerWorld {
 	}
 
 	#update() {
+		this.prevCoinStates = this.currentCoinStates;
+		this.currentCoinStates = this.coinBodies.map((body) => ({
+			rotation: body.rotation(),
+			translation: body.translation()
+		}));
+		this.accumulator = 0;
+
 		this.world.step();
 		this.frame++;
 	}

@@ -25,10 +25,10 @@
 		class="absolute top-4 left-4"
 		on:click={() => {
 			world.addCoin();
-			world.coins = world.coins;
+			world = world;
 		}}>+ coin</button
 	>
 	{#if world}
-		<canvas class="w-full h-full" use:scene={{ coins: world.coins, config: world.config }}></canvas>
+		<canvas class="w-full h-full" use:scene={{ world }}></canvas>
 	{/if}
 </div>

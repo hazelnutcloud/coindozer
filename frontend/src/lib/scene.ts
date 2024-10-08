@@ -1,14 +1,13 @@
-import { PHYSICS_SCALING_FACTOR, type CoinDozerWorld } from './world';
+import { PHYSICS_SCALING_FACTOR, type CoinDozerWorld, type CoinState } from './world';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { Action } from 'svelte/action';
 
 // const instanceMultiple = 100;
 
-export const scene: Action<
-	HTMLCanvasElement,
-	{ coins: CoinDozerWorld['coins']; config: CoinDozerWorld['config'] }
-> = (canvas, params) => {
+export const scene: Action<HTMLCanvasElement, { world: CoinDozerWorld }> = (canvas, params) => {
+	const { world } = params;
+
 	// SETUP
 	const width = canvas.clientWidth;
 	const height = canvas.clientHeight;
@@ -33,7 +32,7 @@ export const scene: Action<
 	});
 
 	// SCENE
-	for (const cuboid of params.config.containerCuboids) {
+	for (const cuboid of world.config.containerCuboids) {
 		const geometry = new THREE.BoxGeometry(
 			cuboid.size.width,
 			cuboid.size.height,
@@ -48,9 +47,9 @@ export const scene: Action<
 	function createCoinInstaced(length: number) {
 		const instanced = new THREE.InstancedMesh(
 			new THREE.CylinderGeometry(
-				params.config.coinSize.radius,
-				params.config.coinSize.radius,
-				params.config.coinSize.halfHeight * 2
+				world.config.coinSize.radius,
+				world.config.coinSize.radius,
+				world.config.coinSize.halfHeight * 2
 			),
 			new THREE.MeshBasicMaterial({ color: 'gold' }),
 			length
@@ -58,13 +57,33 @@ export const scene: Action<
 		instanced.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 		return instanced;
 	}
-	function updateCoins(coins: CoinDozerWorld['coins'], coinInstanced: THREE.InstancedMesh) {
+
+	function getInterpolatedState(world: CoinDozerWorld, alpha: number) {
+		return world.currentCoinStates.map((current, index) => {
+			const previous = world.prevCoinStates[index] as CoinState | undefined;
+			return {
+				translation: new THREE.Vector3().lerpVectors(
+					previous?.translation ?? current.translation,
+					current.translation,
+					alpha
+				),
+				rotation: new THREE.Quaternion().slerpQuaternions(
+					new THREE.Quaternion().fromArray(Object.values(previous?.rotation ?? current.rotation)),
+					new THREE.Quaternion().fromArray(Object.values(current.rotation)),
+					alpha
+				)
+			};
+		});
+	}
+
+	function updateCoins(
+		interpolatedCoins: ReturnType<typeof getInterpolatedState>,
+		coinInstanced: THREE.InstancedMesh
+	) {
 		const dummy = new THREE.Object3D();
-		for (const [index, coin] of coins.entries()) {
-			const position = coin.translation();
-			const rotation = coin.rotation();
-			dummy.position.set(position.x, position.y, position.z).multiplyScalar(PHYSICS_SCALING_FACTOR);
-			dummy.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
+		for (const [index, coin] of interpolatedCoins.entries()) {
+			dummy.position.copy(coin.translation).multiplyScalar(PHYSICS_SCALING_FACTOR);
+			dummy.quaternion.copy(coin.rotation);
 			dummy.updateMatrix();
 			coinInstanced.setMatrixAt(index, dummy.matrix);
 		}
@@ -72,26 +91,39 @@ export const scene: Action<
 		coinInstanced.computeBoundingBox();
 	}
 
-	let coinInstanced = createCoinInstaced(params.coins.length);
-	updateCoins(params.coins, coinInstanced);
+	let coinInstanced = createCoinInstaced(world.coinBodies.length);
+	updateCoins(getInterpolatedState(world, 1), coinInstanced);
 	scene.add(coinInstanced);
 
 	// ANIMATE
+	let time = performance.now();
+
 	function animate() {
+		const newtime = performance.now();
+		const deltaTime = (newtime - time) / 1000;
+		time = newtime;
+
+		world.accumulator += deltaTime;
+
+		const alpha = world.accumulator / (1 / world.config.fps);
+		const interpolatedState = getInterpolatedState(world, alpha);
+		updateCoins(interpolatedState, coinInstanced);
+
 		renderer.render(scene, camera);
-		updateCoins(params.coins, coinInstanced);
 	}
+
 	renderer.setAnimationLoop(animate);
 
 	return {
-		update: ({ coins }) => {
+		update: ({ world }) => {
+			if (world.coinBodies.length === coinInstanced.count) {
+				return;
+			}
 			coinInstanced.removeFromParent();
 			coinInstanced.dispose();
 
-			params.coins = coins;
-			coinInstanced = createCoinInstaced(coins.length);
-
-			updateCoins(coins, coinInstanced);
+			coinInstanced = createCoinInstaced(world.coinBodies.length);
+			updateCoins(getInterpolatedState(world, 1), coinInstanced);
 			scene.add(coinInstanced);
 		},
 		destroy: () => {
