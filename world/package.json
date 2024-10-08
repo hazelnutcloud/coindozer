@@ -1,7 +1,6 @@
 {
   "name": "world",
   "module": "src/index.ts",
-  "type": "module",
   "devDependencies": {
     "@types/bun": "latest"
   },
@@ -13,7 +12,8 @@
       "default": "./src/index.ts"
     }
   },
+  "type": "module",
   "dependencies": {
-    "@dimforge/rapier3d": "^0.14.0"
+    "@dimforge/rapier3d-compat": "^0.14.0"
   }
 }

@@ -30,7 +30,9 @@
 	},
 	"type": "module",
 	"dependencies": {
+		"@dimforge/rapier3d-compat": "^0.14.0",
 		"@threlte/extras": "^8.11.5",
+		"server": "workspace:*",
 		"three": "^0.169.0",
 		"world": "workspace:*"
 	}

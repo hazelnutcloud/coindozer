@@ -11,6 +11,7 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.14.0",
     "drizzle-orm": "^0.34.1",
     "world": "workspace:*"
   },
@@ -18,5 +19,8 @@
     ".": {
       "default": "./src/index.ts"
     }
+  },
+  "scripts": {
+    "start": "bun run src/server.ts"
   }
 }

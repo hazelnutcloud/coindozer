@@ -1,6 +1,6 @@
-import type { Quaternion, Vector3 } from "@dimforge/rapier3d";
+import type { Quaternion, Vector3 } from "@dimforge/rapier3d-compat";
 
-type Rapier = Awaited<typeof import("@dimforge/rapier3d")>;
+type Rapier = typeof import("@dimforge/rapier3d-compat")["default"];
 
 export { defaultWorldConfig } from "./config";
 
@@ -12,6 +12,7 @@ export interface CoinDozerWorldConfig {
 	}[];
 	coinSize: { halfHeight: number; radius: number };
 	snapshot?: Uint8Array;
+	frame?: number;
 }
 
 export const PHYSICS_SCALING_FACTOR = 100;
@@ -29,12 +30,14 @@ export class CoinDozerWorld {
 	rapier: Rapier;
 	world: InstanceType<Rapier["World"]>;
 	config: CoinDozerWorldConfig;
-	frame = 0;
+	frame;
 	accumulator = 0;
 	prevCoinStates: CoinState[] = [];
 	currentCoinStates: CoinState[] = [];
 	coinBodies: InstanceType<Rapier["RigidBody"]>[] = [];
 	snapshotSubscribers: SnapshotCallback[] = [];
+	coinSubscribers: (() => void)[] = [];
+	pendingCoins: Record<number, { frame: number }[]> = {};
 	interval?: NodeJS.Timer;
 
 	constructor(rapier: Rapier, config: CoinDozerWorldConfig) {
@@ -44,6 +47,8 @@ export class CoinDozerWorld {
 		} else {
 			this.world = new rapier.World({ x: 0, y: -9.81, z: 0 });
 		}
+		this.world.forEachRigidBody((body) => this.coinBodies.push(body));
+		this.frame = config.frame ?? 0;
 		this.config = config;
 		this.#setup();
 	}
@@ -68,7 +73,20 @@ export class CoinDozerWorld {
 		this.interval = undefined;
 	}
 
-	addCoin() {
+	addCoin(frame?: number) {
+		if (frame) {
+			if (frame < this.frame) {
+				// TODO: handle case where frame is less than this.frame
+				throw new Error("Out of sync!");
+			}
+			if (this.pendingCoins[frame] === undefined) {
+				this.pendingCoins[frame] = [{ frame }];
+			} else {
+				this.pendingCoins[frame].push({ frame });
+			}
+			return this.frame;
+		}
+
 		const bodyDesc = this.rapier.RigidBodyDesc.dynamic().setTranslation(
 			0,
 			10 / PHYSICS_SCALING_FACTOR,
@@ -87,11 +105,20 @@ export class CoinDozerWorld {
 			rotation: body.rotation(),
 			translation: body.translation(),
 		});
+		if (this.coinSubscribers.length > 0) {
+			for (const subscriber of this.coinSubscribers) {
+				subscriber();
+			}
+		}
 		return this.frame;
 	}
 
 	subscribeToSnapshots(callback: SnapshotCallback) {
 		this.snapshotSubscribers.push(callback);
+	}
+
+	subscribeToCoinAdded(callback: () => void) {
+		this.coinSubscribers.push(callback);
 	}
 
 	#setup() {
@@ -113,6 +140,13 @@ export class CoinDozerWorld {
 	}
 
 	#update() {
+		if (this.pendingCoins[this.frame] !== undefined) {
+			for (const pendingCoin of this.pendingCoins[this.frame]) {
+				this.addCoin();
+			}
+			delete this.pendingCoins[this.frame];
+		}
+
 		this.prevCoinStates = this.currentCoinStates;
 		this.currentCoinStates = this.coinBodies.map((body) => ({
 			rotation: body.rotation(),

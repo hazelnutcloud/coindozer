@@ -1,5 +1,5 @@
 import { CoinDozerWorld, defaultWorldConfig } from "world";
-import { drizzle } from "drizzle-orm/connect";
+import { drizzle, migrate } from "drizzle-orm/connect";
 import { worldSnapshotsTable } from "./db/schema";
 import { FRAME_DELAY } from "./config";
 import {
@@ -7,10 +7,13 @@ import {
 	type ClientPacket,
 	type ServerPacket,
 } from "./protocol";
-const rapier = await import("@dimforge/rapier3d");
+import rapier from "@dimforge/rapier3d-compat";
+
+await rapier.init();
 
 if (!process.env.DB_FILE_NAME) throw new Error("DB_FILE_NAME not set");
 const db = await drizzle("bun:sqlite", process.env.DB_FILE_NAME);
+await migrate(db, { migrationsFolder: "drizzle" });
 
 const latestWorldSnapshotRow = (
 	await db.select().from(worldSnapshotsTable).limit(1)
@@ -119,3 +122,5 @@ const server = Bun.serve({
 		perMessageDeflate: true,
 	},
 });
+
+console.log("Server listening on", `${server.hostname}:${server.port}`);
