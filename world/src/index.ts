@@ -11,6 +11,8 @@ export interface CoinDozerWorldConfig {
 		position: Vector3;
 	}[];
 	coinSize: { halfHeight: number; radius: number };
+	gravity: Vector3;
+	coinDropY: number;
 	snapshot?: Uint8Array;
 	frame?: number;
 }
@@ -31,46 +33,24 @@ export class CoinDozerWorld {
 	world: InstanceType<Rapier["World"]>;
 	config: CoinDozerWorldConfig;
 	frame;
-	accumulator = 0;
 	prevCoinStates: CoinState[] = [];
 	currentCoinStates: CoinState[] = [];
 	coinBodies: InstanceType<Rapier["RigidBody"]>[] = [];
 	snapshotSubscribers: SnapshotCallback[] = [];
 	coinSubscribers: (() => void)[] = [];
 	pendingCoins: Record<number, { frame: number }[]> = {};
-	interval?: NodeJS.Timer;
 
 	constructor(rapier: Rapier, config: CoinDozerWorldConfig) {
 		this.rapier = rapier;
-		if (config.snapshot !== undefined) {
-			this.world = rapier.World.restoreSnapshot(config.snapshot);
-		} else {
-			this.world = new rapier.World({ x: 0, y: -9.81, z: 0 });
-		}
-		this.world.forEachRigidBody((body) => this.coinBodies.push(body));
 		this.frame = config.frame ?? 0;
 		this.config = config;
-		this.#setup();
-	}
-
-	start() {
-		if (this.interval) {
-			return;
+		if (config.snapshot !== undefined) {
+			this.world = rapier.World.restoreSnapshot(config.snapshot);
+			this.world.forEachRigidBody((body) => this.coinBodies.push(body));
+		} else {
+			this.world = new rapier.World(config.gravity);
+			this.#setup();
 		}
-
-		this.interval = setInterval(
-			this.#update.bind(this),
-			1000 / this.config.fps,
-		);
-	}
-
-	pause() {
-		if (!this.interval) {
-			return;
-		}
-
-		clearInterval(this.interval);
-		this.interval = undefined;
 	}
 
 	addCoin(frame?: number) {
@@ -89,14 +69,14 @@ export class CoinDozerWorld {
 
 		const bodyDesc = this.rapier.RigidBodyDesc.dynamic().setTranslation(
 			0,
-			10 / PHYSICS_SCALING_FACTOR,
+			this.config.coinDropY,
 			0,
 		);
 		const body = this.world.createRigidBody(bodyDesc);
 
 		const collider = this.rapier.ColliderDesc.cylinder(
-			this.config.coinSize.halfHeight / PHYSICS_SCALING_FACTOR,
-			this.config.coinSize.radius / PHYSICS_SCALING_FACTOR,
+			this.config.coinSize.halfHeight,
+			this.config.coinSize.radius,
 		);
 		this.world.createCollider(collider, body);
 
@@ -127,19 +107,15 @@ export class CoinDozerWorld {
 		for (const cuboid of this.config.containerCuboids) {
 			const { position, size } = cuboid;
 			const colliderDesc = RAPIER.ColliderDesc.cuboid(
-				size.width / 2 / PHYSICS_SCALING_FACTOR,
-				size.height / 2 / PHYSICS_SCALING_FACTOR,
-				size.depth / 2 / PHYSICS_SCALING_FACTOR,
-			).setTranslation(
-				position.x / PHYSICS_SCALING_FACTOR,
-				position.y / PHYSICS_SCALING_FACTOR,
-				position.z / PHYSICS_SCALING_FACTOR,
-			);
+				size.width / 2,
+				size.height / 2,
+				size.depth / 2,
+			).setTranslation(position.x, position.y, position.z);
 			this.world.createCollider(colliderDesc);
 		}
 	}
 
-	#update() {
+	update() {
 		if (this.pendingCoins[this.frame] !== undefined) {
 			for (const pendingCoin of this.pendingCoins[this.frame]) {
 				this.addCoin();
@@ -152,7 +128,6 @@ export class CoinDozerWorld {
 			rotation: body.rotation(),
 			translation: body.translation(),
 		}));
-		this.accumulator = 0;
 
 		const callbacks = this.snapshotSubscribers
 			.map((subscriber) => subscriber(this.frame))

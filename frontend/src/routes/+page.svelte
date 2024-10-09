@@ -11,6 +11,8 @@
 
   const pendingCoinsBuffer: { frame: number }[] = [];
 
+  const worldHashes: string[] = [];
+
   const handleWsMessage = async (msg: MessageEvent<string>) => {
     const packet: ServerPacket = JSON.parse(msg.data);
 
@@ -43,7 +45,26 @@
         world = world;
       });
 
-      world.start();
+      world.subscribeToSnapshots((frame) => {
+        if (frame % 60 !== 0) {
+          return;
+        }
+        return (snapshot) => {
+          crypto.subtle.digest("SHA-256", snapshot).then((hash) => {
+            const hashArray = Array.from(new Uint8Array(hash));
+            const hashHex = hashArray
+              .map((b) => b.toString(16).padStart(2, "0"))
+              .join("");
+            const remoteHash = worldHashes[frame];
+            if (remoteHash === hashHex) {
+              console.log(`${frame} SYNCED`);
+            } else {
+              console.error(`${frame} OUT OF SYNC`);
+            }
+            delete worldHashes[frame];
+          });
+        };
+      });
     } else if (packet.kind === "new-coin") {
       if (!world) {
         pendingCoinsBuffer.push({ frame: packet.frame });
@@ -52,6 +73,8 @@
       world.addCoin(packet.frame);
     } else if (packet.kind === "error") {
       console.error("Error from websocket connection:", packet.message);
+    } else if (packet.kind === "world-hash") {
+      worldHashes[packet.frame] = packet.hash;
     }
   };
 

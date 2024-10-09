@@ -4,6 +4,7 @@ import { worldSnapshotsTable } from "./db/schema";
 import { FRAME_DELAY } from "./config";
 import {
 	NEW_COINS_TOPIC,
+	WORLD_HASH_TOPIC,
 	type ClientPacket,
 	type ServerPacket,
 } from "./protocol";
@@ -42,6 +43,21 @@ world.subscribeToSnapshots((frame) => {
 	if (frame % FRAME_DELAY !== 0) return;
 
 	return (snapshot) => {
+		if (frame % (FRAME_DELAY * 2) === 0) {
+			crypto.subtle.digest("SHA-256", snapshot).then((hash) => {
+				const hashArray = Array.from(new Uint8Array(hash));
+				const hashHex = hashArray
+					.map((b) => b.toString(16).padStart(2, "0"))
+					.join("");
+				const packet: ServerPacket = {
+					kind: "world-hash",
+					hash: hashHex,
+					frame,
+				};
+				server.publish(WORLD_HASH_TOPIC, JSON.stringify(packet));
+			});
+		}
+
 		activeSnapshot.data = stagingSnapshot.data;
 		activeSnapshot.frame = stagingSnapshot.frame;
 		stagingSnapshot.data = snapshot;
@@ -58,7 +74,7 @@ world.subscribeToSnapshots((frame) => {
 	};
 });
 
-world.start();
+setInterval(world.update.bind(world), 1000 / world.config.fps);
 
 const server = Bun.serve({
 	fetch(request, server) {
@@ -114,10 +130,12 @@ const server = Bun.serve({
 				frame: activeSnapshot.frame,
 			};
 			ws.subscribe(NEW_COINS_TOPIC);
+			ws.subscribe(WORLD_HASH_TOPIC);
 			ws.send(JSON.stringify(packet), true);
 		},
 		close(ws) {
 			ws.unsubscribe(NEW_COINS_TOPIC);
+			ws.unsubscribe(WORLD_HASH_TOPIC);
 		},
 		perMessageDeflate: true,
 	},
