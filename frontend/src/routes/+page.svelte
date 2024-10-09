@@ -1,7 +1,7 @@
 <script lang="ts">
   import { scene } from "$lib/scene";
   import { onMount } from "svelte";
-  import { CoinDozerWorld, defaultWorldConfig } from "world";
+  import { CoinDozerWorld, defaultWorldConfig, SYNC_CHECK_FRAMES } from "world";
   import type { ClientPacket, ServerPacket } from "server";
   import { base64ToUint8Array } from "$lib/decode";
   import rapier from "@dimforge/rapier3d-compat";
@@ -45,25 +45,27 @@
         world = world;
       });
 
-      world.subscribeToSnapshots((frame) => {
-        if (frame % 60 !== 0) {
+      world.subscribeToUpdates((frame) => {
+        if (frame % SYNC_CHECK_FRAMES !== 0) {
           return;
         }
-        return (snapshot) => {
-          crypto.subtle.digest("SHA-256", snapshot).then((hash) => {
-            const hashArray = Array.from(new Uint8Array(hash));
-            const hashHex = hashArray
-              .map((b) => b.toString(16).padStart(2, "0"))
-              .join("");
-            const remoteHash = worldHashes[frame];
-            if (remoteHash === hashHex) {
-              console.log(`${frame} SYNCED`);
-            } else {
-              console.error(`${frame} OUT OF SYNC`);
-            }
-            delete worldHashes[frame];
-          });
-        };
+        if (!world) return;
+
+        const snapshot = world.takeSnapshot();
+
+        crypto.subtle.digest("SHA-256", snapshot).then((hash) => {
+          const hashArray = Array.from(new Uint8Array(hash));
+          const hashHex = hashArray
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join("");
+          const remoteHash = worldHashes[frame];
+          if (remoteHash === hashHex) {
+            console.log(`${frame} SYNCED`);
+          } else {
+            console.error(`${frame} OUT OF SYNC`);
+          }
+          delete worldHashes[frame];
+        });
       });
     } else if (packet.kind === "new-coin") {
       if (!world) {
@@ -71,10 +73,10 @@
         return;
       }
       world.addCoin(packet.frame);
-    } else if (packet.kind === "error") {
-      console.error("Error from websocket connection:", packet.message);
     } else if (packet.kind === "world-hash") {
       worldHashes[packet.frame] = packet.hash;
+    } else if (packet.kind === "error") {
+      console.error("Error from websocket connection:", packet.message);
     }
   };
 

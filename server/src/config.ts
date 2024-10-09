@@ -1,1 +1,1 @@
-export const FRAME_DELAY = 30;
+export const LOCKSTEP_DELAY = 10;

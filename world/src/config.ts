@@ -17,5 +17,7 @@ export const defaultWorldConfig: CoinDozerWorldConfig = {
 		y: -9.81,
 		z: 0,
 	},
-	coinDropY: 0.2,
+	coinDropY: 0.5,
 };
+
+export const SYNC_CHECK_FRAMES = 60;

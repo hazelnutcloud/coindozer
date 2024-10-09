@@ -1,7 +1,7 @@
-import { CoinDozerWorld, defaultWorldConfig } from "world";
+import { CoinDozerWorld, defaultWorldConfig, SYNC_CHECK_FRAMES } from "world";
 import { drizzle, migrate } from "drizzle-orm/connect";
 import { worldSnapshotsTable } from "./db/schema";
-import { FRAME_DELAY } from "./config";
+import { LOCKSTEP_DELAY } from "./config";
 import {
 	NEW_COINS_TOPIC,
 	WORLD_HASH_TOPIC,
@@ -39,42 +39,46 @@ const world = new CoinDozerWorld(rapier, {
 	snapshot: latestWorldSnapshotRow?.snapshotData,
 });
 
-world.subscribeToSnapshots((frame) => {
-	if (frame % FRAME_DELAY !== 0) return;
+world.subscribeToUpdates((frame) => {
+	if (frame % LOCKSTEP_DELAY !== 0) return;
 
-	return (snapshot) => {
-		if (frame % (FRAME_DELAY * 2) === 0) {
-			crypto.subtle.digest("SHA-256", snapshot).then((hash) => {
-				const hashArray = Array.from(new Uint8Array(hash));
-				const hashHex = hashArray
-					.map((b) => b.toString(16).padStart(2, "0"))
-					.join("");
-				const packet: ServerPacket = {
-					kind: "world-hash",
-					hash: hashHex,
-					frame,
-				};
-				server.publish(WORLD_HASH_TOPIC, JSON.stringify(packet));
-			});
-		}
+	const snapshot = world.takeSnapshot();
 
-		activeSnapshot.data = stagingSnapshot.data;
-		activeSnapshot.frame = stagingSnapshot.frame;
-		stagingSnapshot.data = snapshot;
-		stagingSnapshot.frame = frame;
+	if (frame % SYNC_CHECK_FRAMES === 0) {
+		crypto.subtle.digest("SHA-256", snapshot).then((hash) => {
+			const hashArray = Array.from(new Uint8Array(hash));
+			const hashHex = hashArray
+				.map((b) => b.toString(16).padStart(2, "0"))
+				.join("");
+			const packet: ServerPacket = {
+				kind: "world-hash",
+				hash: hashHex,
+				frame,
+			};
+			server.publish(WORLD_HASH_TOPIC, JSON.stringify(packet));
+		});
+	}
 
-		const snapshotData = Buffer.from(snapshot);
-		db.insert(worldSnapshotsTable)
-			.values([{ id: 0, snapshotData }])
-			.onConflictDoUpdate({
-				set: { snapshotData },
-				target: worldSnapshotsTable.id,
-			})
-			.run();
-	};
+	activeSnapshot.data = stagingSnapshot.data;
+	activeSnapshot.frame = stagingSnapshot.frame;
+	stagingSnapshot.data = snapshot;
+	stagingSnapshot.frame = frame;
+
+	const snapshotData = Buffer.from(snapshot);
+	db.insert(worldSnapshotsTable)
+		.values([{ id: 0, snapshotData }])
+		.onConflictDoUpdate({
+			set: { snapshotData },
+			target: worldSnapshotsTable.id,
+		})
+		.run();
 });
 
-setInterval(world.update.bind(world), 1000 / world.config.fps);
+setInterval(() => {
+	console.time("world update");
+	world.update();
+	console.timeEnd("world update");
+}, 1000 / world.config.fps);
 
 const server = Bun.serve({
 	fetch(request, server) {

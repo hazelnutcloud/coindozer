@@ -2,7 +2,7 @@ import type { Quaternion, Vector3 } from "@dimforge/rapier3d-compat";
 
 type Rapier = typeof import("@dimforge/rapier3d-compat")["default"];
 
-export { defaultWorldConfig } from "./config";
+export { defaultWorldConfig, SYNC_CHECK_FRAMES } from "./config";
 
 export interface CoinDozerWorldConfig {
 	fps: number;
@@ -19,26 +19,18 @@ export interface CoinDozerWorldConfig {
 
 export const PHYSICS_SCALING_FACTOR = 100;
 
-export interface CoinState {
-	translation: Vector3;
-	rotation: Quaternion;
-}
-
-type SnapshotCallback = (
-	frame: number,
-) => ((snapshot: Uint8Array) => void) | undefined;
+type UpdateCallback = (frame: number) => void;
 
 export class CoinDozerWorld {
 	rapier: Rapier;
 	world: InstanceType<Rapier["World"]>;
 	config: CoinDozerWorldConfig;
 	frame;
-	prevCoinStates: CoinState[] = [];
-	currentCoinStates: CoinState[] = [];
 	coinBodies: InstanceType<Rapier["RigidBody"]>[] = [];
-	snapshotSubscribers: SnapshotCallback[] = [];
+	updateSubscribers: UpdateCallback[] = [];
 	coinSubscribers: (() => void)[] = [];
 	pendingCoins: Record<number, { frame: number }[]> = {};
+	currentSnapshot?: Uint8Array;
 
 	constructor(rapier: Rapier, config: CoinDozerWorldConfig) {
 		this.rapier = rapier;
@@ -81,10 +73,6 @@ export class CoinDozerWorld {
 		this.world.createCollider(collider, body);
 
 		this.coinBodies.push(body);
-		this.currentCoinStates.push({
-			rotation: body.rotation(),
-			translation: body.translation(),
-		});
 		if (this.coinSubscribers.length > 0) {
 			for (const subscriber of this.coinSubscribers) {
 				subscriber();
@@ -93,8 +81,8 @@ export class CoinDozerWorld {
 		return this.frame;
 	}
 
-	subscribeToSnapshots(callback: SnapshotCallback) {
-		this.snapshotSubscribers.push(callback);
+	subscribeToUpdates(callback: UpdateCallback) {
+		this.updateSubscribers.push(callback);
 	}
 
 	subscribeToCoinAdded(callback: () => void) {
@@ -115,6 +103,14 @@ export class CoinDozerWorld {
 		}
 	}
 
+	takeSnapshot() {
+		if (this.currentSnapshot) {
+			return this.currentSnapshot;
+		}
+		this.currentSnapshot = this.world.takeSnapshot();
+		return this.currentSnapshot;
+	}
+
 	update() {
 		if (this.pendingCoins[this.frame] !== undefined) {
 			for (const pendingCoin of this.pendingCoins[this.frame]) {
@@ -123,23 +119,11 @@ export class CoinDozerWorld {
 			delete this.pendingCoins[this.frame];
 		}
 
-		this.prevCoinStates = this.currentCoinStates;
-		this.currentCoinStates = this.coinBodies.map((body) => ({
-			rotation: body.rotation(),
-			translation: body.translation(),
-		}));
-
-		const callbacks = this.snapshotSubscribers
-			.map((subscriber) => subscriber(this.frame))
-			.filter((callback) => callback !== undefined);
-
-		if (callbacks.length > 0) {
-			const snapshot = this.world.takeSnapshot();
-			for (const callback of callbacks) {
-				callback(snapshot);
-			}
+		for (const subscriber of this.updateSubscribers) {
+			subscriber(this.frame);
 		}
 
+		this.currentSnapshot = undefined;
 		this.world.step();
 		this.frame++;
 	}

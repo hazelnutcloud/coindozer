@@ -1,7 +1,8 @@
+import type { Quaternion, Vector3 } from "@dimforge/rapier3d-compat";
 import type { Action } from "svelte/action";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import type { CoinDozerWorld, CoinState } from "world";
+import type { CoinDozerWorld } from "world";
 
 export const scene: Action<HTMLCanvasElement, { world: CoinDozerWorld }> = (
 	canvas,
@@ -60,9 +61,25 @@ export const scene: Action<HTMLCanvasElement, { world: CoinDozerWorld }> = (
 		return instanced;
 	}
 
-	function getInterpolatedState(world: CoinDozerWorld, alpha: number) {
-		return world.currentCoinStates.map((current, index) => {
-			const previous = world.prevCoinStates[index] as CoinState | undefined;
+	type CoinState = {
+		translation: Vector3;
+		rotation: Quaternion;
+	};
+
+	let prevCoinStates: CoinState[] = [];
+	let currentCoinStates: CoinState[] = [];
+
+	world.subscribeToUpdates(() => {
+		prevCoinStates = currentCoinStates;
+		currentCoinStates = world.coinBodies.map((body) => ({
+			translation: body.translation(),
+			rotation: body.rotation(),
+		}));
+	});
+
+	function getInterpolatedState(alpha: number) {
+		return currentCoinStates.map((current, index) => {
+			const previous = prevCoinStates[index] as CoinState | undefined;
 			return {
 				translation: new THREE.Vector3().lerpVectors(
 					previous?.translation ?? current.translation,
@@ -96,8 +113,10 @@ export const scene: Action<HTMLCanvasElement, { world: CoinDozerWorld }> = (
 	}
 
 	let coinInstanced = createCoinInstaced(world.coinBodies.length);
-	updateCoins(getInterpolatedState(world, 1), coinInstanced);
+	updateCoins(getInterpolatedState(1), coinInstanced);
 	scene.add(coinInstanced);
+
+	console.log(world.coinBodies.length);
 
 	// ANIMATE
 	let lastTime: number | null = null;
@@ -119,7 +138,7 @@ export const scene: Action<HTMLCanvasElement, { world: CoinDozerWorld }> = (
 		}
 
 		const alpha = accumulator / worldStepTime;
-		const interpolatedState = getInterpolatedState(world, alpha);
+		const interpolatedState = getInterpolatedState(alpha);
 		updateCoins(interpolatedState, coinInstanced);
 
 		renderer.render(scene, camera);
@@ -136,7 +155,7 @@ export const scene: Action<HTMLCanvasElement, { world: CoinDozerWorld }> = (
 			coinInstanced.dispose();
 
 			coinInstanced = createCoinInstaced(world.coinBodies.length);
-			updateCoins(getInterpolatedState(world, 1), coinInstanced);
+			updateCoins(getInterpolatedState(1), coinInstanced);
 			scene.add(coinInstanced);
 		},
 		destroy: () => {
