@@ -11,7 +11,7 @@
 
   const pendingCoinsBuffer: { frame: number }[] = [];
 
-  const worldHashes: string[] = [];
+  const worldHashes: { timestamp: number; hash: string }[] = [];
 
   const handleWsMessage = async (msg: MessageEvent<string>) => {
     const packet: ServerPacket = JSON.parse(msg.data);
@@ -59,11 +59,15 @@
             .map((b) => b.toString(16).padStart(2, "0"))
             .join("");
           const remoteHash = worldHashes[frame];
-          if (remoteHash === hashHex) {
+
+          if (remoteHash && remoteHash.hash === hashHex) {
             console.log(`${frame} SYNCED`);
+            const delay = performance.now() - remoteHash.timestamp;
+            console.log("lockstep delay:", delay, "ms");
           } else {
             console.error(`${frame} OUT OF SYNC`);
           }
+          
           delete worldHashes[frame];
         });
       });
@@ -74,7 +78,10 @@
       }
       world.addCoin(packet.frame);
     } else if (packet.kind === "world-hash") {
-      worldHashes[packet.frame] = packet.hash;
+      worldHashes[packet.frame] = {
+        hash: packet.hash,
+        timestamp: performance.now(),
+      };
     } else if (packet.kind === "error") {
       console.error("Error from websocket connection:", packet.message);
     }

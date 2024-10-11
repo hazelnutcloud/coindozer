@@ -74,10 +74,24 @@ world.subscribeToUpdates((frame) => {
 		.run();
 });
 
+let lastTime = process.hrtime();
+let accumulator = 0;
+const worldStepTime = 1 / world.config.fps;
+
 setInterval(() => {
-	console.time("world update");
-	world.update();
-	console.timeEnd("world update");
+	const currTime = process.hrtime();
+	const seconds = currTime[0] - lastTime[0];
+	const nanoseconds = currTime[1] - lastTime[1];
+	const deltaTime = seconds + nanoseconds / 1e9;
+	accumulator += deltaTime;
+	lastTime = currTime;
+
+	while (accumulator >= worldStepTime) {
+		console.time("world update");
+		world.update();
+		accumulator -= worldStepTime;
+		console.timeEnd("world update");
+	}
 }, 1000 / world.config.fps);
 
 const server = Bun.serve({
