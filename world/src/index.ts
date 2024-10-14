@@ -63,7 +63,7 @@ export class CoinDozerWorld {
 			0,
 			this.config.coinDropY,
 			0,
-		);
+		).setCanSleep(true);
 		const body = this.world.createRigidBody(bodyDesc);
 
 		const collider = this.rapier.ColliderDesc.cylinder(

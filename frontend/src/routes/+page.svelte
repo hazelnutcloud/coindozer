@@ -53,7 +53,7 @@
 
         const snapshot = world.takeSnapshot();
 
-        crypto.subtle.digest("SHA-256", snapshot).then((hash) => {
+        crypto.subtle.digest("SHA-1", snapshot).then((hash) => {
           const hashArray = Array.from(new Uint8Array(hash));
           const hashHex = hashArray
             .map((b) => b.toString(16).padStart(2, "0"))

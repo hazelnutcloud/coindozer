@@ -2,6 +2,12 @@ import type { Quaternion, Vector3 } from "@dimforge/rapier3d-compat";
 import type { Action } from "svelte/action";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import {
+	EffectComposer,
+	OBJLoader,
+	OutputPass,
+	RenderPixelatedPass,
+} from "three/examples/jsm/Addons.js";
 import type { CoinDozerWorld } from "world";
 
 export const scene: Action<HTMLCanvasElement, { world: CoinDozerWorld }> = (
@@ -17,11 +23,19 @@ export const scene: Action<HTMLCanvasElement, { world: CoinDozerWorld }> = (
 	const scene = new THREE.Scene();
 
 	const camera = new THREE.PerspectiveCamera(75, width / height, 0.001, 1000);
-	camera.position.set(0.5, 0.5, 0.5);
+	camera.position.set(0.3, 0.4, 0.3);
 
 	const renderer = new THREE.WebGLRenderer({ canvas });
 	renderer.setClearAlpha(0);
 	renderer.setSize(width, height);
+	renderer.shadowMap.enabled = true;
+
+	const composer = new EffectComposer(renderer);
+	const renderPixelatedPass = new RenderPixelatedPass(4, scene, camera);
+	composer.addPass(renderPixelatedPass);
+
+	const outputPass = new OutputPass();
+	composer.addPass(outputPass);
 
 	new OrbitControls(camera, canvas);
 
@@ -32,31 +46,68 @@ export const scene: Action<HTMLCanvasElement, { world: CoinDozerWorld }> = (
 		camera.aspect = width / height;
 		camera.updateProjectionMatrix();
 		renderer.setSize(width, height);
+		composer.setSize(width, height);
+	});
+
+	// const textureLoader = new THREE.TextureLoader();
+	// const coinTexture = textureLoader.load("/textures/golden-flame-1x.png");
+	// coinTexture.minFilter = THREE.NearestFilter;
+	// coinTexture.magFilter = THREE.NearestFilter;
+
+	let coinObj: THREE.Group<THREE.Object3DEventMap>;
+	let coinInstanced: THREE.InstancedMesh<any, any, THREE.InstancedMeshEventMap>;
+
+	const objLoader = new OBJLoader();
+	objLoader.load("/objects/coin.obj", (obj) => {
+		coinObj = obj;
+		renderer.setAnimationLoop(animate);
+
+		coinInstanced = createCoinInstaced(world.coinBodies.length);
+		updateCoins(getInterpolatedState(1), coinInstanced);
+		scene.add(coinInstanced);
 	});
 
 	// SCENE
+	const ambientLight = new THREE.AmbientLight();
+	scene.add(ambientLight);
+	const directionalLight = new THREE.DirectionalLight();
+	directionalLight.position.set(-1, 0.5, 1);
+	directionalLight.castShadow = true;
+	directionalLight.shadow.radius;
+	directionalLight.shadow.camera.top = 0.3;
+	directionalLight.shadow.camera.bottom = -0.3;
+	directionalLight.shadow.camera.right = 0.3;
+	directionalLight.shadow.camera.left = -0.3;
+	scene.add(directionalLight);
+
 	for (const cuboid of world.config.containerCuboids) {
 		const geometry = new THREE.BoxGeometry(
 			cuboid.size.width,
 			cuboid.size.height,
 			cuboid.size.depth,
 		);
-		const material = new THREE.MeshBasicMaterial({ color: "green" });
+		const material = new THREE.MeshStandardMaterial({ color: "green" });
 		const mesh = new THREE.Mesh(geometry, material);
+		mesh.receiveShadow = true;
 		mesh.position.set(cuboid.position.x, cuboid.position.y, cuboid.position.z);
 		scene.add(mesh);
 	}
 
 	function createCoinInstaced(length: number) {
 		const instanced = new THREE.InstancedMesh(
-			new THREE.CylinderGeometry(
-				world.config.coinSize.radius,
-				world.config.coinSize.radius,
-				world.config.coinSize.halfHeight * 2,
-			),
-			new THREE.MeshBasicMaterial({ color: "gold" }),
+			// new THREE.CylinderGeometry(
+			// 	world.config.coinSize.radius,
+			// 	world.config.coinSize.radius,
+			// 	world.config.coinSize.halfHeight * 2,
+			// ),
+			// new THREE.MeshPhongMaterial({ color: "gold" }),
+			coinObj.children[0].geometry,
+			// coinObj.children[0].material,
+			new THREE.MeshPhongMaterial({ color: "gold" }),
 			length,
 		);
+		instanced.castShadow = true;
+		instanced.receiveShadow = true;
 		instanced.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 		return instanced;
 	}
@@ -105,16 +156,13 @@ export const scene: Action<HTMLCanvasElement, { world: CoinDozerWorld }> = (
 		for (const [index, coin] of interpolatedCoins.entries()) {
 			dummy.position.copy(coin.translation);
 			dummy.quaternion.copy(coin.rotation);
+      dummy.scale.set(0.06, 0.06, 0.06)
 			dummy.updateMatrix();
 			coinInstanced.setMatrixAt(index, dummy.matrix);
 		}
 		coinInstanced.instanceMatrix.needsUpdate = true;
 		coinInstanced.computeBoundingBox();
 	}
-
-	let coinInstanced = createCoinInstaced(world.coinBodies.length);
-	updateCoins(getInterpolatedState(1), coinInstanced);
-	scene.add(coinInstanced);
 
 	console.log(world.coinBodies.length);
 
@@ -141,10 +189,10 @@ export const scene: Action<HTMLCanvasElement, { world: CoinDozerWorld }> = (
 		const interpolatedState = getInterpolatedState(alpha);
 		updateCoins(interpolatedState, coinInstanced);
 
-		renderer.render(scene, camera);
+		composer.render();
 	}
 
-	renderer.setAnimationLoop(animate);
+	// renderer.setAnimationLoop(animate);
 
 	return {
 		update: ({ world }) => {

@@ -42,10 +42,13 @@ const world = new CoinDozerWorld(rapier, {
 world.subscribeToUpdates((frame) => {
 	if (frame % LOCKSTEP_DELAY !== 0) return;
 
+	console.time("snapshot");
 	const snapshot = world.takeSnapshot();
+	console.timeEnd("snapshot");
 
+  console.time("hash")
 	if (frame % SYNC_CHECK_FRAMES === 0) {
-		crypto.subtle.digest("SHA-256", snapshot).then((hash) => {
+		crypto.subtle.digest("SHA-1", snapshot).then((hash) => {
 			const hashArray = Array.from(new Uint8Array(hash));
 			const hashHex = hashArray
 				.map((b) => b.toString(16).padStart(2, "0"))
@@ -58,6 +61,7 @@ world.subscribeToUpdates((frame) => {
 			server.publish(WORLD_HASH_TOPIC, JSON.stringify(packet));
 		});
 	}
+  console.timeEnd("hash")
 
 	activeSnapshot.data = stagingSnapshot.data;
 	activeSnapshot.frame = stagingSnapshot.frame;
@@ -87,10 +91,10 @@ setInterval(() => {
 	lastTime = currTime;
 
 	while (accumulator >= worldStepTime) {
-		console.time("world update");
+		// console.time("world update");
 		world.update();
 		accumulator -= worldStepTime;
-		console.timeEnd("world update");
+		// console.timeEnd("world update");
 	}
 }, 1000 / world.config.fps);
 
