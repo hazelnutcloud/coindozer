@@ -6,11 +6,10 @@
   import { base64ToUint8Array } from "$lib/decode";
   import rapier from "@dimforge/rapier3d-compat";
 
-  let world: CoinDozerWorld | undefined;
+  let world: CoinDozerWorld | undefined = $state();
   let ws: WebSocket | undefined;
 
   const pendingCoinsBuffer: { frame: number }[] = [];
-
   const worldHashes: { timestamp: number; hash: string }[] = [];
 
   const handleWsMessage = async (msg: MessageEvent<string>) => {
@@ -37,13 +36,13 @@
       }
       pendingCoinsBuffer.length = 0;
 
-      // biome-ignore lint/correctness/noSelfAssign: <explanation>
-      world = world;
+      // // biome-ignore lint/correctness/noSelfAssign: <explanation>
+      // world = world;
 
-      world.subscribeToCoinAdded(() => {
-        // biome-ignore lint/correctness/noSelfAssign: <explanation>
-        world = world;
-      });
+      // world.subscribeToCoinAdded(() => {
+      //   // biome-ignore lint/correctness/noSelfAssign: <explanation>
+      //   world = world;
+      // });
 
       world.subscribeToUpdates((frame) => {
         if (frame % SYNC_CHECK_FRAMES !== 0) {
@@ -110,7 +109,7 @@
 <div class="relative w-full h-screen">
   <button
     class="absolute top-4 left-4"
-    on:click={() => {
+    onclick={() => {
       handleClickNewCoin();
     }}>+ coin</button
   >
