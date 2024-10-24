@@ -1,6 +1,19 @@
-import type { CoinDozerWorldConfig } from ".";
+import type { Vector3 } from "@dimforge/rapier3d-compat";
 
-export const defaultWorldConfig: CoinDozerWorldConfig = {
+export interface WorldConfig {
+	fps: number;
+	containerCuboids: {
+		size: { width: number; height: number; depth: number };
+		position: Vector3;
+	}[];
+	coinSize: { halfHeight: number; radius: number };
+	gravity: Vector3;
+	coinDropY: number;
+	snapshot?: Uint8Array;
+	frame?: number;
+}
+
+export const defaultWorldConfig: WorldConfig = {
 	fps: 30,
 	containerCuboids: [
 		{

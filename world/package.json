@@ -1,19 +1,19 @@
 {
-  "name": "world",
-  "module": "src/index.ts",
-  "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
-    "typescript": "^5.0.0"
-  },
-  "exports": {
-    ".": {
-      "default": "./src/index.ts"
-    }
-  },
-  "type": "module",
-  "dependencies": {
-    "@dimforge/rapier3d-compat": "^0.14.0"
-  }
+	"name": "world",
+	"module": "src/index.ts",
+	"devDependencies": {
+		"@types/bun": "latest"
+	},
+	"peerDependencies": {
+		"typescript": "^5.0.0"
+	},
+	"exports": {
+		".": {
+			"default": "./src/index.ts"
+		}
+	},
+	"type": "module",
+	"dependencies": {
+		"@dimforge/rapier3d-compat": "^0.14.0"
+	}
 }

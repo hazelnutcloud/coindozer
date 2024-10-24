@@ -1,4 +1,9 @@
-import { CoinDozerWorld, defaultWorldConfig, SYNC_CHECK_FRAMES } from "world";
+import {
+	addCoin,
+	defaultWorldConfig,
+	initWorld,
+	SYNC_CHECK_FRAMES,
+} from "world";
 import { drizzle, migrate } from "drizzle-orm/connect";
 import { worldSnapshotsTable } from "./db/schema";
 import { LOCKSTEP_DELAY } from "./config";
@@ -34,69 +39,71 @@ const stagingSnapshot: Snapshot = {
 	frame: 0,
 };
 
-const world = new CoinDozerWorld(rapier, {
+const worldConfig = {
 	...defaultWorldConfig,
 	snapshot: latestWorldSnapshotRow?.snapshotData,
-});
+};
 
-world.subscribeToUpdates((frame) => {
-	if (frame % LOCKSTEP_DELAY !== 0) return;
-
-	console.time("snapshot");
-	const snapshot = world.takeSnapshot();
-	console.timeEnd("snapshot");
-
-  console.time("hash")
-	if (frame % SYNC_CHECK_FRAMES === 0) {
-		crypto.subtle.digest("SHA-1", snapshot).then((hash) => {
-			const hashArray = Array.from(new Uint8Array(hash));
-			const hashHex = hashArray
-				.map((b) => b.toString(16).padStart(2, "0"))
-				.join("");
-			const packet: ServerPacket = {
-				kind: "world-hash",
-				hash: hashHex,
-				frame,
-			};
-			server.publish(WORLD_HASH_TOPIC, JSON.stringify(packet));
-		});
-	}
-  console.timeEnd("hash")
-
-	activeSnapshot.data = stagingSnapshot.data;
-	activeSnapshot.frame = stagingSnapshot.frame;
-	stagingSnapshot.data = snapshot;
-	stagingSnapshot.frame = frame;
-
-	const snapshotData = Buffer.from(snapshot);
-	db.insert(worldSnapshotsTable)
-		.values([{ id: 0, snapshotData }])
-		.onConflictDoUpdate({
-			set: { snapshotData },
-			target: worldSnapshotsTable.id,
-		})
-		.run();
+const world = initWorld({
+	config: worldConfig,
+	rapier,
 });
 
 let lastTime = process.hrtime();
 let accumulator = 0;
-const worldStepTime = 1 / world.config.fps;
+let frame = 0;
+const worldStepTime = 1 / worldConfig.fps;
 
 setInterval(() => {
 	const currTime = process.hrtime();
 	const seconds = currTime[0] - lastTime[0];
 	const nanoseconds = currTime[1] - lastTime[1];
 	const deltaTime = seconds + nanoseconds / 1e9;
-	accumulator += deltaTime;
+	accumulator += deltaTime > 0.5 ? 0.5 : deltaTime;
 	lastTime = currTime;
 
-	while (accumulator >= worldStepTime) {
-		// console.time("world update");
-		world.update();
-		accumulator -= worldStepTime;
-		// console.timeEnd("world update");
+	if (accumulator >= worldStepTime) {
+		while (accumulator > 0) {
+			const frameSnapshot = frame;
+			if (frameSnapshot % LOCKSTEP_DELAY === 0) {
+				const snapshot = world.takeSnapshot();
+
+				if (frameSnapshot % SYNC_CHECK_FRAMES === 0) {
+					crypto.subtle.digest("SHA-1", snapshot).then((hash) => {
+						const hashArray = Array.from(new Uint8Array(hash));
+						const hashHex = hashArray
+							.map((b) => b.toString(16).padStart(2, "0"))
+							.join("");
+						const packet: ServerPacket = {
+							kind: "world-hash",
+							hash: hashHex,
+							frame: frameSnapshot,
+						};
+						server.publish(WORLD_HASH_TOPIC, JSON.stringify(packet));
+					});
+				}
+
+				activeSnapshot.data = stagingSnapshot.data;
+				activeSnapshot.frame = stagingSnapshot.frame;
+				stagingSnapshot.data = snapshot;
+				stagingSnapshot.frame = frameSnapshot;
+
+				const snapshotData = Buffer.from(snapshot);
+				db.insert(worldSnapshotsTable)
+					.values([{ id: 0, snapshotData }])
+					.onConflictDoUpdate({
+						set: { snapshotData },
+						target: worldSnapshotsTable.id,
+					})
+					.run();
+			}
+
+			world.step();
+			frame++;
+			accumulator -= worldStepTime;
+		}
 	}
-}, 1000 / world.config.fps);
+}, 500 / worldConfig.fps);
 
 const server = Bun.serve({
 	fetch(request, server) {
@@ -124,7 +131,7 @@ const server = Bun.serve({
 			const packet: ClientPacket = JSON.parse(message);
 
 			if (packet.kind === "add-coin") {
-				const frame = world.addCoin();
+				addCoin({ world, config: worldConfig, rapier });
 
 				const packet: ServerPacket = {
 					kind: "new-coin",
