@@ -1,5 +1,8 @@
 {
   "name": "coindozer",
   "private": true,
-  "workspaces": ["frontend", "world", "server"]
+  "workspaces": ["frontend", "world", "server"],
+  "trustedDependencies": [
+    "@biomejs/biome"
+  ]
 }
