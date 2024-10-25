@@ -9,6 +9,7 @@ export interface WorldConfig {
 	coinSize: { halfHeight: number; radius: number };
 	gravity: Vector3;
 	coinDropY: number;
+	lockstepFrameDelay: number;
 	snapshot?: Uint8Array;
 	frame?: number;
 }
@@ -31,6 +32,7 @@ export const defaultWorldConfig: WorldConfig = {
 		z: 0,
 	},
 	coinDropY: 0.5,
+	lockstepFrameDelay: 15,
 };
 
 export const SYNC_CHECK_FRAMES = 60;

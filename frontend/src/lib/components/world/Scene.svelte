@@ -34,6 +34,8 @@
   let accumulator = 0;
   let currentFrame = 0;
   let world: World | undefined = undefined;
+  let syncCorrectionTime = 0;
+  let syncCorrectionRate = 0.01;
 
   export const addCoin = (addToFrame: number) => {
     const addPendingCoin = () => {
@@ -79,7 +81,14 @@
       coinBodies.push(body);
     });
   };
-  export const addRemoteHash = (params: { frame: number; hash: string }) => {
+  export const updateRemoteFrame = (params: {
+    frame: number;
+    hash: string;
+  }) => {
+    const frameDifference = params.frame - currentFrame;
+    const lockStepDifference = frameDifference - worldConfig.lockstepFrameDelay;
+    syncCorrectionTime += lockStepDifference * worldStepTime;
+
     worldHashes[params.frame] = {
       hash: params.hash,
       timestamp: performance.now(),
@@ -112,9 +121,13 @@
   const physicsStage = useStage("physics-stage", {
     before: mainStage,
     callback(delta, runTasks) {
-      accumulator += delta;
+      const cappedDelta = delta > 0.25 ? 0.25 : delta;
+      let correction = syncCorrectionTime * syncCorrectionRate;
+      let correctedDelta = Math.max(cappedDelta + correction, 0);
+      correctedDelta = correctedDelta < 0 ? 0 : correctedDelta;
+      syncCorrectionTime -= correctedDelta - delta;
+      accumulator += correctedDelta;
       while (accumulator >= worldStepTime) {
-        console.log(accumulator)
         accumulator -= worldStepTime;
         runTasks(worldStepTime);
       }

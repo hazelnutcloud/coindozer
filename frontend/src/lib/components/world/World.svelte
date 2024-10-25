@@ -16,7 +16,7 @@
     scene.addCoin(packet.frame);
   }}
   onWorldHash={(packet) => {
-    scene.addRemoteHash(packet);
+    scene.updateRemoteFrame(packet);
   }}
 />
 <button class="absolute top-4 left-4 z-10" onclick={() => ws.sendNewCoin()}>

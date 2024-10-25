@@ -6,7 +6,6 @@ import {
 } from "world";
 import { drizzle, migrate } from "drizzle-orm/connect";
 import { worldSnapshotsTable } from "./db/schema";
-import { LOCKSTEP_DELAY } from "./config";
 import {
 	NEW_COINS_TOPIC,
 	WORLD_HASH_TOPIC,
@@ -61,10 +60,9 @@ setInterval(() => {
 	accumulator += deltaTime > 250 ? 250 : deltaTime;
 
 	while (accumulator >= worldStepTime) {
-		console.log(accumulator);
 		accumulator -= worldStepTime;
 		const frameSnapshot = frame;
-		if (frameSnapshot % LOCKSTEP_DELAY === 0) {
+		if (frameSnapshot % worldConfig.lockstepFrameDelay === 0) {
 			const snapshot = world.takeSnapshot();
 
 			if (frameSnapshot % SYNC_CHECK_FRAMES === 0) {
