@@ -49,61 +49,58 @@ const world = initWorld({
 	rapier,
 });
 
-let lastTime = process.hrtime();
+let lastTime = performance.now();
 let accumulator = 0;
 let frame = 0;
-const worldStepTime = 1 / worldConfig.fps;
+const worldStepTime = 1000 / worldConfig.fps;
 
 setInterval(() => {
-	const currTime = process.hrtime();
-	const seconds = currTime[0] - lastTime[0];
-	const nanoseconds = currTime[1] - lastTime[1];
-	const deltaTime = seconds + nanoseconds / 1e9;
-	accumulator += deltaTime > 0.5 ? 0.5 : deltaTime;
+	const currTime = performance.now();
+	const deltaTime = currTime - lastTime;
 	lastTime = currTime;
+	accumulator += deltaTime > 250 ? 250 : deltaTime;
 
-	if (accumulator >= worldStepTime) {
-		while (accumulator > 0) {
-			const frameSnapshot = frame;
-			if (frameSnapshot % LOCKSTEP_DELAY === 0) {
-				const snapshot = world.takeSnapshot();
+	while (accumulator >= worldStepTime) {
+		console.log(accumulator);
+		accumulator -= worldStepTime;
+		const frameSnapshot = frame;
+		if (frameSnapshot % LOCKSTEP_DELAY === 0) {
+			const snapshot = world.takeSnapshot();
 
-				if (frameSnapshot % SYNC_CHECK_FRAMES === 0) {
-					crypto.subtle.digest("SHA-1", snapshot).then((hash) => {
-						const hashArray = Array.from(new Uint8Array(hash));
-						const hashHex = hashArray
-							.map((b) => b.toString(16).padStart(2, "0"))
-							.join("");
-						const packet: ServerPacket = {
-							kind: "world-hash",
-							hash: hashHex,
-							frame: frameSnapshot,
-						};
-						server.publish(WORLD_HASH_TOPIC, JSON.stringify(packet));
-					});
-				}
-
-				activeSnapshot.data = stagingSnapshot.data;
-				activeSnapshot.frame = stagingSnapshot.frame;
-				stagingSnapshot.data = snapshot;
-				stagingSnapshot.frame = frameSnapshot;
-
-				const snapshotData = Buffer.from(snapshot);
-				db.insert(worldSnapshotsTable)
-					.values([{ id: 0, snapshotData }])
-					.onConflictDoUpdate({
-						set: { snapshotData },
-						target: worldSnapshotsTable.id,
-					})
-					.run();
+			if (frameSnapshot % SYNC_CHECK_FRAMES === 0) {
+				crypto.subtle.digest("SHA-1", snapshot).then((hash) => {
+					const hashArray = Array.from(new Uint8Array(hash));
+					const hashHex = hashArray
+						.map((b) => b.toString(16).padStart(2, "0"))
+						.join("");
+					const packet: ServerPacket = {
+						kind: "world-hash",
+						hash: hashHex,
+						frame: frameSnapshot,
+					};
+					server.publish(WORLD_HASH_TOPIC, JSON.stringify(packet));
+				});
 			}
 
-			world.step();
-			frame++;
-			accumulator -= worldStepTime;
+			activeSnapshot.data = stagingSnapshot.data;
+			activeSnapshot.frame = stagingSnapshot.frame;
+			stagingSnapshot.data = snapshot;
+			stagingSnapshot.frame = frameSnapshot;
+
+			const snapshotData = Buffer.from(snapshot);
+			db.insert(worldSnapshotsTable)
+				.values([{ id: 0, snapshotData }])
+				.onConflictDoUpdate({
+					set: { snapshotData },
+					target: worldSnapshotsTable.id,
+				})
+				.run();
 		}
+
+		world.step();
+		frame++;
 	}
-}, 500 / worldConfig.fps);
+});
 
 const server = Bun.serve({
 	fetch(request, server) {

@@ -1,26 +1,30 @@
 <script lang="ts">
-  import type { RigidBody } from "@dimforge/rapier3d-compat";
+  import { base64ToUint8Array } from "$lib/decode";
+  import rapier, {
+    type RigidBody,
+    type World,
+  } from "@dimforge/rapier3d-compat";
   import { T, useTask, useStage, useThrelte } from "@threlte/core";
   import { OrbitControls, InstancedMesh, Instance } from "@threlte/extras";
   import { Quaternion } from "three";
   import { lerp } from "three/src/math/MathUtils.js";
-  import type { WorldConfig } from "world";
-
-  const {
-    worldConfig,
-    coinBodies,
-    onWorldUpdate,
-  }: {
-    worldConfig: WorldConfig;
-    coinBodies: RigidBody[];
-    onWorldUpdate: () => void;
-  } = $props();
-  const worldStepTime = 1 / worldConfig.fps;
+  import {
+    defaultWorldConfig,
+    initWorld,
+    SYNC_CHECK_FRAMES,
+    addCoin as worldAddCoin,
+  } from "world";
 
   type CoinState = {
     translation: { x: number; y: number; z: number };
     rotation: { x: number; y: number; z: number; w: number };
   };
+
+  const coinBodies: RigidBody[] = [];
+  const worldConfig = $state(defaultWorldConfig);
+  const worldStepTime = 1 / worldConfig.fps;
+  const pendingCoins: Record<number, { frame: number }[]> = {};
+  const worldHashes: { timestamp: number; hash: string }[] = [];
   let prevCoinStates: CoinState[] = coinBodies.map((body) => ({
     translation: body.translation(),
     rotation: body.rotation(),
@@ -28,29 +32,128 @@
   let currCoinStates: CoinState[] = prevCoinStates;
   let interpolatedCoinStates: CoinState[] = $state.raw(currCoinStates);
   let accumulator = 0;
+  let currentFrame = 0;
+  let world: World | undefined = undefined;
+
+  export const addCoin = (addToFrame: number) => {
+    const addPendingCoin = () => {
+      if (!pendingCoins[addToFrame]) {
+        pendingCoins[addToFrame] = [{ frame: addToFrame }];
+      } else {
+        pendingCoins[addToFrame].push({ frame: addToFrame });
+      }
+    };
+
+    if (!world) {
+      addPendingCoin();
+      return;
+    }
+
+    if (addToFrame > currentFrame) {
+      addPendingCoin();
+    } else if (addToFrame === currentFrame) {
+      const body = worldAddCoin({ config: worldConfig, rapier, world });
+      coinBodies.push(body);
+    } else {
+      // TODO: handle this case
+      console.error("OUT OF SYNC");
+      location.reload();
+    }
+  };
+  export const init = async (params: { data: string; frame: number }) => {
+    if (world !== undefined) {
+      return;
+    }
+
+    const snapshot = base64ToUint8Array(params.data);
+    await rapier.init();
+
+    worldConfig.snapshot = snapshot;
+    world = initWorld({
+      config: worldConfig,
+      rapier,
+    });
+    currentFrame = params.frame;
+    world.forEachActiveRigidBody((body) => {
+      // TODO: handle different types of rigid bodies by handle (server need to send more info)
+      coinBodies.push(body);
+    });
+  };
+  export const addRemoteHash = (params: { frame: number; hash: string }) => {
+    worldHashes[params.frame] = {
+      hash: params.hash,
+      timestamp: performance.now(),
+    };
+  };
+
+  const checkRemoteSync = (world: World, currentFrame: number) => {
+    const snapshot = world.takeSnapshot();
+
+    crypto.subtle.digest("SHA-1", snapshot).then((hash) => {
+      const hashArray = Array.from(new Uint8Array(hash));
+      const hashHex = hashArray
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+      const remoteHash = worldHashes[currentFrame];
+
+      if (remoteHash && remoteHash.hash === hashHex) {
+        console.log(`${currentFrame} SYNCED`);
+        const delay = performance.now() - remoteHash.timestamp;
+        console.log("lockstep delay:", delay, "ms");
+      } else {
+        console.error(`${currentFrame} OUT OF SYNC`);
+      }
+
+      delete worldHashes[currentFrame];
+    });
+  };
 
   const { mainStage } = useThrelte();
-  const physicsStage = useStage("physics-stage", { before: mainStage });
+  const physicsStage = useStage("physics-stage", {
+    before: mainStage,
+    callback(delta, runTasks) {
+      accumulator += delta;
+      while (accumulator >= worldStepTime) {
+        console.log(accumulator)
+        accumulator -= worldStepTime;
+        runTasks(worldStepTime);
+      }
+    },
+  });
 
   useTask(
     "physics-update",
-    (delta) => {
-      accumulator += delta > 0.5 ? 0.5 : delta;
+    () => {
+      if (!world) return;
 
-      while (accumulator >= worldStepTime) {
-        onWorldUpdate();
-        prevCoinStates = currCoinStates;
-        currCoinStates = coinBodies.map((body) => ({
-          translation: body.translation(),
-          rotation: body.rotation(),
-        }));
-        accumulator -= worldStepTime;
+      const frameSnapshot = currentFrame;
+
+      if (pendingCoins[frameSnapshot] !== undefined) {
+        for (const { frame } of pendingCoins[frameSnapshot]) {
+          addCoin(frame);
+        }
+        delete pendingCoins[frameSnapshot];
       }
+
+      if (frameSnapshot % SYNC_CHECK_FRAMES === 0) {
+        checkRemoteSync(world, frameSnapshot);
+      }
+
+      world.step();
+
+      prevCoinStates = currCoinStates;
+      currCoinStates = coinBodies.map((body) => ({
+        translation: body.translation(),
+        rotation: body.rotation(),
+      }));
+
+      currentFrame++;
     },
     { stage: physicsStage },
   );
 
   useTask("coins-update", () => {
+    if (!world) return;
     const alpha = accumulator / worldStepTime;
 
     interpolatedCoinStates = currCoinStates.map(
@@ -113,7 +216,7 @@
   </T.Mesh>
 {/each}
 
-{#if interpolatedCoinStates.length > 0}
+{#if interpolatedCoinStates && interpolatedCoinStates.length > 0}
   <InstancedMesh>
     <T.CylinderGeometry
       args={[
