@@ -17,7 +17,6 @@ export type ServerPacket =
 	| {
 			kind: "world-hash";
 			frame: number;
-			hash: string;
 	  };
 
 export type ClientPacket = { kind: "add-coin" };

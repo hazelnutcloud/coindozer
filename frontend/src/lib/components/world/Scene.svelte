@@ -5,15 +5,13 @@
     type World,
   } from "@dimforge/rapier3d-compat";
   import { T, useTask, useStage, useThrelte } from "@threlte/core";
-  import { OrbitControls, InstancedMesh, Instance } from "@threlte/extras";
+  import { OrbitControls } from "@threlte/extras";
   import { Quaternion } from "three";
   import { lerp } from "three/src/math/MathUtils.js";
   import {
     defaultWorldConfig,
     initWorld,
-    SYNC_CHECK_FRAMES,
     addCoin as worldAddCoin,
-    hashData,
   } from "common";
 
   type CoinState = {
@@ -25,7 +23,6 @@
   const worldConfig = $state(defaultWorldConfig);
   const worldStepTime = 1 / worldConfig.fps;
   const pendingCoins: Record<number, { frame: number }[]> = {};
-  const worldHashes: { timestamp: number; hash: string }[] = [];
   let prevCoinStates: CoinState[] = coinBodies.map((body) => ({
     translation: body.translation(),
     rotation: body.rotation(),
@@ -84,36 +81,10 @@
   };
   export const updateRemoteFrame = (params: {
     frame: number;
-    hash: string;
   }) => {
     const frameDifference = params.frame - currentFrame;
     const lockStepDifference = frameDifference - worldConfig.lockstepFrameDelay;
     syncCorrectionTime += lockStepDifference * worldStepTime;
-
-    worldHashes[params.frame] = {
-      hash: params.hash,
-      timestamp: performance.now(),
-    };
-  };
-
-  const checkRemoteSync = (world: World, currentFrame: number) => {
-    const snapshot = world.takeSnapshot();
-
-    hashData(btoa(String.fromCharCode.apply(null, Array.from(snapshot)))).then(
-      (hash) => {
-        const remoteHash = worldHashes[currentFrame];
-
-        if (remoteHash && remoteHash.hash === hash) {
-          console.log(`${currentFrame} SYNCED`);
-          const delay = performance.now() - remoteHash.timestamp;
-          console.log("lockstep delay:", delay, "ms");
-        } else {
-          console.error(`${currentFrame} OUT OF SYNC`);
-        }
-
-        delete worldHashes[currentFrame];
-      },
-    );
   };
 
   const { mainStage } = useThrelte();
@@ -144,10 +115,6 @@
           addCoin(frame);
         }
         delete pendingCoins[frameSnapshot];
-      }
-
-      if (frameSnapshot % SYNC_CHECK_FRAMES === 0) {
-        checkRemoteSync(world, frameSnapshot);
       }
 
       world.step();

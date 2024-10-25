@@ -58,11 +58,9 @@ const subscribeToWorldSnapshot = async () => {
 			continue;
 		}
 
-		const hash = await hashData(packet.base64Snapshot);
 		const sendPacket: ServerPacket = {
 			kind: "world-hash",
 			frame: packet.frame,
-			hash,
 		};
 
 		server.publish(WORLD_HASH_TOPIC, JSON.stringify(sendPacket));
