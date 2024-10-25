@@ -15,7 +15,6 @@
     addCoin as worldAddCoin,
     hashData,
   } from "common";
-  import CoinInstances from "./CoinInstances.svelte";
 
   type CoinState = {
     translation: { x: number; y: number; z: number };
@@ -71,7 +70,6 @@
 
     const snapshot = base64ToUint8Array(params.base64Data);
     await rapier.init();
-    console.log("init snapshot", snapshot);
 
     worldConfig.snapshot = snapshot;
     world = initWorld({
@@ -83,7 +81,6 @@
       // TODO: handle different types of rigid bodies by handle (server need to send more info)
       coinBodies.push(body);
     });
-    console.log('init',coinBodies.length)
   };
   export const updateRemoteFrame = (params: {
     frame: number;
@@ -160,7 +157,6 @@
         translation: body.translation(),
         rotation: body.rotation(),
       }));
-      console.log(coinBodies.length)
 
       currentFrame++;
     },
@@ -231,15 +227,18 @@
   </T.Mesh>
 {/each}
 
-<InstancedMesh>
-  <T.CylinderGeometry
-    args={[
-      worldConfig.coinSize.radius,
-      worldConfig.coinSize.radius,
-      worldConfig.coinSize.halfHeight * 2,
-    ]}
-  ></T.CylinderGeometry>
-  <T.MeshStandardMaterial color="gold"></T.MeshStandardMaterial>
-
-  <CoinInstances coinStates={interpolatedCoinStates} />
-</InstancedMesh>
+{#each interpolatedCoinStates as { rotation, translation }}
+  <T.Mesh
+    position={[translation.x, translation.y, translation.z]}
+    quaternion={[rotation.x, rotation.y, rotation.z, rotation.w]}
+  >
+    <T.CylinderGeometry
+      args={[
+        worldConfig.coinSize.radius,
+        worldConfig.coinSize.radius,
+        worldConfig.coinSize.halfHeight * 2,
+      ]}
+    ></T.CylinderGeometry>
+    <T.MeshStandardMaterial color="gold"></T.MeshStandardMaterial></T.Mesh
+  >
+{/each}

@@ -43,15 +43,10 @@ const world = initWorld({
 	rapier,
 });
 
-world.forEachActiveRigidBody((body) => {
-	console.log(body.handle);
-});
-
 const subscribeToAddCoins = async () => {
 	const addCoinSub = nats.subscribe(ADD_COIN_SUBJECT);
 	for await (const msg of addCoinSub) {
 		const packet = msg.json<AddCoinPacket>();
-    console.log("World: add coin", packet)
 
 		const frameSnapshot = frame;
 		addCoin({ config: worldConfig, rapier, world });

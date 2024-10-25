@@ -38,7 +38,6 @@ const subscribeToWorldSnapshot = async () => {
 
 	for await (const msg of sub) {
 		const packet = msg.json<WorldSnapshotPacket>();
-		console.log("Server: world snapshot", packet.frame);
 
 		if (packet.frame <= stagingSnapshot.frame) {
 			console.warn(
@@ -75,7 +74,6 @@ const subscribeToNewCoins = async () => {
 
 	for await (const msg of sub) {
 		const packet = msg.json<NewCoinPacket>();
-		console.log("Server: new coin", packet);
 
 		const sendPacket: ServerPacket = {
 			kind: "new-coin",
