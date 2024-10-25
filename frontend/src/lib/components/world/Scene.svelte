@@ -13,7 +13,9 @@
     initWorld,
     SYNC_CHECK_FRAMES,
     addCoin as worldAddCoin,
-  } from "world";
+    hashData,
+  } from "common";
+  import CoinInstances from "./CoinInstances.svelte";
 
   type CoinState = {
     translation: { x: number; y: number; z: number };
@@ -35,7 +37,7 @@
   let currentFrame = 0;
   let world: World | undefined = undefined;
   let syncCorrectionTime = 0;
-  let syncCorrectionRate = 0.01;
+  const syncCorrectionRate = 0.01;
 
   export const addCoin = (addToFrame: number) => {
     const addPendingCoin = () => {
@@ -62,13 +64,14 @@
       location.reload();
     }
   };
-  export const init = async (params: { data: string; frame: number }) => {
+  export const init = async (params: { base64Data: string; frame: number }) => {
     if (world !== undefined) {
       return;
     }
 
-    const snapshot = base64ToUint8Array(params.data);
+    const snapshot = base64ToUint8Array(params.base64Data);
     await rapier.init();
+    console.log("init snapshot", snapshot);
 
     worldConfig.snapshot = snapshot;
     world = initWorld({
@@ -80,6 +83,7 @@
       // TODO: handle different types of rigid bodies by handle (server need to send more info)
       coinBodies.push(body);
     });
+    console.log('init',coinBodies.length)
   };
   export const updateRemoteFrame = (params: {
     frame: number;
@@ -98,23 +102,21 @@
   const checkRemoteSync = (world: World, currentFrame: number) => {
     const snapshot = world.takeSnapshot();
 
-    crypto.subtle.digest("SHA-1", snapshot).then((hash) => {
-      const hashArray = Array.from(new Uint8Array(hash));
-      const hashHex = hashArray
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
-      const remoteHash = worldHashes[currentFrame];
+    hashData(btoa(String.fromCharCode.apply(null, Array.from(snapshot)))).then(
+      (hash) => {
+        const remoteHash = worldHashes[currentFrame];
 
-      if (remoteHash && remoteHash.hash === hashHex) {
-        console.log(`${currentFrame} SYNCED`);
-        const delay = performance.now() - remoteHash.timestamp;
-        console.log("lockstep delay:", delay, "ms");
-      } else {
-        console.error(`${currentFrame} OUT OF SYNC`);
-      }
+        if (remoteHash && remoteHash.hash === hash) {
+          console.log(`${currentFrame} SYNCED`);
+          const delay = performance.now() - remoteHash.timestamp;
+          console.log("lockstep delay:", delay, "ms");
+        } else {
+          console.error(`${currentFrame} OUT OF SYNC`);
+        }
 
-      delete worldHashes[currentFrame];
-    });
+        delete worldHashes[currentFrame];
+      },
+    );
   };
 
   const { mainStage } = useThrelte();
@@ -122,9 +124,8 @@
     before: mainStage,
     callback(delta, runTasks) {
       const cappedDelta = delta > 0.25 ? 0.25 : delta;
-      let correction = syncCorrectionTime * syncCorrectionRate;
-      let correctedDelta = Math.max(cappedDelta + correction, 0);
-      correctedDelta = correctedDelta < 0 ? 0 : correctedDelta;
+      const correction = syncCorrectionTime * syncCorrectionRate;
+      const correctedDelta = Math.max(cappedDelta + correction, 0);
       syncCorrectionTime -= correctedDelta - delta;
       accumulator += correctedDelta;
       while (accumulator >= worldStepTime) {
@@ -159,6 +160,7 @@
         translation: body.translation(),
         rotation: body.rotation(),
       }));
+      console.log(coinBodies.length)
 
       currentFrame++;
     },
@@ -229,22 +231,15 @@
   </T.Mesh>
 {/each}
 
-{#if interpolatedCoinStates && interpolatedCoinStates.length > 0}
-  <InstancedMesh>
-    <T.CylinderGeometry
-      args={[
-        worldConfig.coinSize.radius,
-        worldConfig.coinSize.radius,
-        worldConfig.coinSize.halfHeight * 2,
-      ]}
-    ></T.CylinderGeometry>
-    <T.MeshStandardMaterial color="gold"></T.MeshStandardMaterial>
+<InstancedMesh>
+  <T.CylinderGeometry
+    args={[
+      worldConfig.coinSize.radius,
+      worldConfig.coinSize.radius,
+      worldConfig.coinSize.halfHeight * 2,
+    ]}
+  ></T.CylinderGeometry>
+  <T.MeshStandardMaterial color="gold"></T.MeshStandardMaterial>
 
-    {#each interpolatedCoinStates as { rotation, translation }}
-      <Instance
-        quaternion={[rotation.x, rotation.y, rotation.z, rotation.w]}
-        position={[translation.x, translation.y, translation.z]}
-      />
-    {/each}
-  </InstancedMesh>
-{/if}
+  <CoinInstances coinStates={interpolatedCoinStates} />
+</InstancedMesh>

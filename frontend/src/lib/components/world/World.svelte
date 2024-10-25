@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { defaultWorldConfig } from "world";
-  import { type RigidBody } from "@dimforge/rapier3d-compat";
   import { Canvas } from "@threlte/core";
   import Scene from "./Scene.svelte";
   import WebsocketComponent from "./Websocket.svelte";

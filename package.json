@@ -1,6 +1,6 @@
 {
 	"name": "coindozer",
 	"private": true,
-	"workspaces": ["frontend", "world", "server"],
-	"trustedDependencies": ["@biomejs/biome", "@sveltejs/kit"]
+	"workspaces": ["frontend", "backend", "common"],
+	"trustedDependencies": ["@biomejs/biome", "@sveltejs/kit", "esbuild"]
 }

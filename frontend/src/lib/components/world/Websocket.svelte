@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ClientPacket, ServerPacket } from "server";
+  import type { ClientPacket, ServerPacket } from "common";
   import { onMount } from "svelte";
 
   export const sendNewCoin = () => {
@@ -28,9 +28,11 @@
     if (packet.kind === "init") {
       onInit(packet);
     } else if (packet.kind === "new-coin") {
+      console.log("Client: new-coin", packet);
       onNewCoin(packet);
     } else if (packet.kind === "world-hash") {
       onWorldHash(packet);
+      console.log("Client: world-hash", packet);
     } else if (packet.kind === "error") {
       console.error("Error from websocket connection:", packet.message);
     }

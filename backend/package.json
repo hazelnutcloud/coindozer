@@ -1,0 +1,31 @@
+{
+	"name": "backend",
+	"module": "src/index.ts",
+	"devDependencies": {
+		"@types/bun": "latest"
+	},
+	"peerDependencies": {
+		"typescript": "^5.0.0"
+	},
+	"exports": {
+		".": {
+			"default": "./src/index.ts"
+		}
+	},
+	"type": "module",
+	"dependencies": {
+		"@dimforge/rapier3d-compat": "^0.14.0",
+		"@nats-io/transport-node": "^3.0.0-12",
+		"drizzle-kit": "^0.26.2",
+		"drizzle-orm": "^0.35.3",
+		"common": "workspace:*"
+	},
+	"scripts": {
+		"nats:start": "docker start nats || docker run --name nats -d -p 4222:4222 -p 8222:8222 nats --http_port 8222",
+		"nats:stop": "docker stop nats",
+		"server:dev": "bun run --watch src/server.ts",
+		"server:start": "bun run src/server.ts",
+		"world:dev": "bun run --watch src/world.ts",
+		"world:start": "bun run src/world.ts"
+	}
+}
