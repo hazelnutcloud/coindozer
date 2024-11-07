@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ClientPacket, ServerPacket } from "common";
   import { onMount } from "svelte";
+  import { PUBLIC_SERVER_URL } from "$env/static/public";
 
   export const sendNewCoin = () => {
     if (!ws) return;
@@ -39,7 +40,7 @@
   };
 
   onMount(() => {
-    ws = new WebSocket("ws://coindozer-server.fly.dev/world");
+    ws = new WebSocket(`${PUBLIC_SERVER_URL}/world`);
     ws.addEventListener("message", handleWsMessage);
 
     return () => {
