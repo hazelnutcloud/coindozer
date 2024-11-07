@@ -13,16 +13,16 @@ import {
 	type WorldSnapshotPacket,
 } from "common";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
-
+import { getEnv } from "./env";
 await rapier.init();
 
-if (!process.env.DB_FILE_NAME) throw new Error("DB_FILE_NAME not set");
-if (!process.env.NATS_HOSTPORT) throw new Error("NATS_HOSTPORT not set");
+const dbFileName = getEnv("DB_FILE_NAME");
+const natsHostport = getEnv("NATS_HOSTPORT");
 
-const db = drizzle(process.env.DB_FILE_NAME);
+const db = drizzle(dbFileName);
 migrate(db, { migrationsFolder: "drizzle" });
 
-const nats = await connect({ servers: process.env.NATS_HOSTPORT });
+const nats = await connect({ servers: natsHostport });
 
 const latestWorldSnapshotRow = (
 	await db.select().from(worldSnapshotsTable).limit(1)

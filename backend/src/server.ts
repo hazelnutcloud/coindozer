@@ -1,7 +1,6 @@
 import { connect } from "@nats-io/transport-node";
 import {
 	ADD_COIN_SUBJECT,
-	base64ToUint8Array,
 	NEW_COIN_SUBJECT,
 	NEW_COINS_TOPIC,
 	WORLD_HASH_TOPIC,
@@ -13,11 +12,11 @@ import {
 	type WorldSnapshotPacket,
 } from "common";
 import { SYNC_CHECK_FRAMES } from "./config";
-import { hashData } from "common";
+import { getEnv } from "./env";
 
-if (!process.env.NATS_HOSTPORT) throw new Error("NATS_HOSTPORT not set");
+const natsHostport = getEnv("NATS_HOSTPORT");
 
-const nats = await connect({ servers: process.env.NATS_HOSTPORT });
+const nats = await connect({ servers: natsHostport });
 
 type Snapshot = {
 	base64Data: string | undefined;

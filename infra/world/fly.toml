@@ -1,0 +1,22 @@
+# fly.toml app configuration file generated for coindozer-world on 2024-11-07T22:33:05+08:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'coindozer-world'
+primary_region = 'sin'
+
+[build]
+
+[env]
+  DB_FILE_NAME = '/app/data/world.sqlite'
+  NATS_HOSTPORT = 'coindozer-nats.internal:4222'
+
+[[mounts]]
+  source = 'data'
+  destination = '/app/data'
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1

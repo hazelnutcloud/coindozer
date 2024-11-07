@@ -39,7 +39,7 @@
   };
 
   onMount(() => {
-    ws = new WebSocket("ws://localhost:3000/world");
+    ws = new WebSocket("ws://coindozer-server.fly.dev/world");
     ws.addEventListener("message", handleWsMessage);
 
     return () => {

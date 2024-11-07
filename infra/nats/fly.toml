@@ -1,0 +1,16 @@
+# fly.toml app configuration file generated for coindozer-nats on 2024-11-07T17:45:59+08:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'coindozer-nats'
+primary_region = 'sin'
+
+[build]
+image = 'nats'
+[processes]
+app = "--config nats-server.conf --addr fly-local-6pn"
+[[vm]]
+memory = '1gb'
+cpu_kind = 'shared'
+cpus = 1

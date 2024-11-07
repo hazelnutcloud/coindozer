@@ -2,10 +2,10 @@
 	"name": "backend",
 	"module": "src/index.ts",
 	"devDependencies": {
-		"@types/bun": "latest"
+		"@types/bun": "^1.1.13"
 	},
 	"peerDependencies": {
-		"typescript": "^5.0.0"
+		"typescript": "^5.6.3"
 	},
 	"exports": {
 		".": {
@@ -15,9 +15,9 @@
 	"type": "module",
 	"dependencies": {
 		"@dimforge/rapier3d-compat": "^0.14.0",
-		"@nats-io/transport-node": "^3.0.0-12",
-		"drizzle-kit": "^0.26.2",
-		"drizzle-orm": "^0.35.3",
+		"@nats-io/transport-node": "^3.0.0-21",
+		"drizzle-kit": "^0.28.0",
+		"drizzle-orm": "^0.36.1",
 		"common": "workspace:*"
 	},
 	"scripts": {
@@ -26,6 +26,8 @@
 		"server:dev": "bun run --watch src/server.ts",
 		"server:start": "bun run src/server.ts",
 		"world:dev": "bun run --watch src/world.ts",
-		"world:start": "bun run src/world.ts"
+		"world:start": "bun run src/world.ts",
+		"server:build": "bun build ./src/server.ts --target=bun --outdir=out",
+		"world:build": "bun build ./src/world.ts --target=bun --outdir=out"
 	}
 }
