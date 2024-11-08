@@ -2,7 +2,8 @@
 	"name": "backend",
 	"module": "src/index.ts",
 	"devDependencies": {
-		"@types/bun": "^1.1.13"
+		"@types/bun": "^1.1.13",
+		"better-sqlite3": "^11.5.0"
 	},
 	"peerDependencies": {
 		"typescript": "^5.6.3"
@@ -16,9 +17,10 @@
 	"dependencies": {
 		"@dimforge/rapier3d-compat": "^0.14.0",
 		"@nats-io/transport-node": "^3.0.0-21",
+		"@sinclair/typebox": "^0.33.21",
+		"common": "workspace:*",
 		"drizzle-kit": "^0.28.0",
-		"drizzle-orm": "^0.36.1",
-		"common": "workspace:*"
+		"drizzle-orm": "^0.36.1"
 	},
 	"scripts": {
 		"nats:start": "docker start nats || docker run --name nats -d -p 4222:4222 -p 8222:8222 nats --http_port 8222",
@@ -28,6 +30,8 @@
 		"world:dev": "bun run --watch src/world.ts",
 		"world:start": "bun run src/world.ts",
 		"server:build": "bun build ./src/server.ts --target=bun --outdir=out",
-		"world:build": "bun build ./src/world.ts --target=bun --outdir=out"
+		"world:build": "bun build ./src/world.ts --target=bun --outdir=out",
+		"server:generate": "drizzle-kit generate --config drizzle-server.config.ts",
+		"world:generate": "drizzle-kit generate --config drizzle-world.config.ts"
 	}
 }

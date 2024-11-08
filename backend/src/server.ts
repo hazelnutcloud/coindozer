@@ -10,8 +10,8 @@ import {
 	type NewCoinPacket,
 	type ServerPacket,
 	type WorldSnapshotPacket,
+	SYNC_CHECK_FRAMES,
 } from "common";
-import { SYNC_CHECK_FRAMES } from "./config";
 import { getEnv } from "./env";
 
 const natsHostport = getEnv("NATS_HOSTPORT");
@@ -83,20 +83,25 @@ const subscribeToNewCoins = async () => {
 subscribeToWorldSnapshot();
 subscribeToNewCoins();
 
-type WsData = { user?: { address: string } };
-
-const server = Bun.serve<WsData>({
+const server = Bun.serve({
 	fetch(request, server) {
 		const url = new URL(request.url);
 
+    if (url.pathname.startsWith("/auth")) {}
+
 		if (url.pathname === "/world") {
-			// TODO: implement user sessions and auth
-			const success = server.upgrade<WsData>(request, {
-				data: { user: { address: "0xdeadbeef" } },
-			});
-			if (success) return;
+			if (!activeSnapshot.base64Data) {
+				return new Response("Game world not ready", { status: 503 });
+			}
+
+			if (server.upgrade(request)) return;
+
 			return new Response("Websocket upgrade failed", { status: 500 });
 		}
+
+    if (url.pathname === "/coins" && request.method === "POST") {
+      
+    }
 
 		return new Response("Not Found", { status: 404 });
 	},
@@ -122,32 +127,21 @@ const server = Bun.serve<WsData>({
 			ws.send(JSON.stringify(packet), true);
 		},
 		message(ws, message) {
-			if (!ws.data.user) {
-				const packet: ServerPacket = {
-					kind: "error",
-					message: "Unauthenticated",
-				};
-				ws.send(JSON.stringify(packet));
-				return;
-			}
-
-			if (message instanceof Buffer) {
-				const packet: ServerPacket = {
-					kind: "error",
-					message: "Invalid packet",
-				};
-				ws.send(JSON.stringify(packet));
-				return;
-			}
-
-			const packet: ClientPacket = JSON.parse(message);
-
-			if (packet.kind === "add-coin") {
-				const packet: AddCoinPacket = {
-					sender: ws.data.user.address,
-				};
-				nats.publish(ADD_COIN_SUBJECT, JSON.stringify(packet));
-			}
+			// if (message instanceof Buffer) {
+			// 	const packet: ServerPacket = {
+			// 		kind: "error",
+			// 		message: "Invalid packet",
+			// 	};
+			// 	ws.send(JSON.stringify(packet));
+			// 	return;
+			// }
+			// const packet: ClientPacket = JSON.parse(message);
+			// if (packet.kind === "add-coin") {
+			// 	const packet: AddCoinPacket = {
+			// 		sender: ws.data.user.address,
+			// 	};
+			// 	nats.publish(ADD_COIN_SUBJECT, JSON.stringify(packet));
+			// }
 		},
 		close(ws) {
 			ws.unsubscribe(NEW_COINS_TOPIC);

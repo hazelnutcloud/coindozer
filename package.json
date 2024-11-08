@@ -1,12 +1,12 @@
 {
-	"name": "coindozer",
-	"private": true,
-	"workspaces": ["frontend", "backend", "common"],
-	"trustedDependencies": ["@biomejs/biome", "@sveltejs/kit", "esbuild"],
-	"scripts": {
-		"server:deploy": "fly deploy --config ./infra/server/fly.toml --dockerfile ./infra/server/Dockerfile --ignorefile=./infra/server/.dockerignore",
-		"nats:deploy": "fly deploy --config ./infra/nats/fly.toml --dockerfile ./infra/nats/Dockerfile --ignorefile=./infra/nats/.dockerignore",
-		"world:deploy": "fly deploy --config ./infra/world/fly.toml --dockerfile ./infra/world/Dockerfile --ignorefile=./infra/world/.dockerignore",
+  "name": "coindozer",
+  "private": true,
+  "workspaces": ["frontend", "backend", "common"],
+  "trustedDependencies": ["@biomejs/biome", "@sveltejs/kit", "better-sqlite3", "esbuild"],
+  "scripts": {
+    "server:deploy": "fly deploy --config ./infra/server/fly.toml --dockerfile ./infra/server/Dockerfile --ignorefile=./infra/server/.dockerignore",
+    "nats:deploy": "fly deploy --config ./infra/nats/fly.toml --dockerfile ./infra/nats/Dockerfile --ignorefile=./infra/nats/.dockerignore",
+    "world:deploy": "fly deploy --config ./infra/world/fly.toml --dockerfile ./infra/world/Dockerfile --ignorefile=./infra/world/.dockerignore",
     "frontend:deploy": "fly deploy --config ./infra/frontend/fly.toml --dockerfile ./infra/frontend/Dockerfile --ignorefile=./infra/frontend/.dockerignore --build-arg PUBLIC_SERVER_URL=wss://coindozer-server.fly.dev"
-	}
+  }
 }

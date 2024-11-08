@@ -10,6 +10,10 @@ export interface WorldConfig {
 	gravity: Vector3;
 	coinDropY: number;
 	lockstepFrameDelay: number;
+	coinScoringArea: {
+		aabbCenter: { x: number; y: number; z: number };
+		aabbHalfExtents: { x: number; y: number; z: number };
+	};
 	snapshot?: Uint8Array;
 	frame?: number;
 }
@@ -22,6 +26,18 @@ export const defaultWorldConfig: WorldConfig = {
 			position: { x: 0, y: 0, z: 0 },
 		},
 	],
+	coinScoringArea: {
+		aabbCenter: {
+			x: 0,
+			y: -0.5,
+			z: 0,
+		},
+		aabbHalfExtents: {
+			x: 1,
+			y: 0.5,
+			z: 1,
+		},
+	},
 	coinSize: {
 		halfHeight: 0.01,
 		radius: 0.04,

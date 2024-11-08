@@ -1,9 +1,7 @@
 import { drizzle } from "drizzle-orm/bun-sqlite";
-import { worldSnapshotsTable } from "./db/schema";
+import { worldSnapshotsTable } from "./db/world/schema";
 import rapier from "@dimforge/rapier3d-compat";
 import { connect } from "@nats-io/transport-node";
-import { defaultWorldConfig } from "./config";
-import { addCoin, initWorld } from "./methods";
 import {
 	ADD_COIN_SUBJECT,
 	NEW_COIN_SUBJECT,
@@ -11,16 +9,22 @@ import {
 	type AddCoinPacket,
 	type NewCoinPacket,
 	type WorldSnapshotPacket,
+	defaultWorldConfig,
+	addCoin,
+	initWorld,
 } from "common";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import { getEnv } from "./env";
+import { sql } from "drizzle-orm";
 await rapier.init();
 
 const dbFileName = getEnv("DB_FILE_NAME");
 const natsHostport = getEnv("NATS_HOSTPORT");
 
 const db = drizzle(dbFileName);
-migrate(db, { migrationsFolder: "drizzle" });
+db.run(sql`PRAGMA journal_mode = WAL`);
+db.run(sql`PRAGMA synchronous = 0`);
+migrate(db, { migrationsFolder: "migrations/world" });
 
 const nats = await connect({ servers: natsHostport });
 
@@ -59,6 +63,18 @@ const subscribeToAddCoins = async () => {
 	}
 };
 subscribeToAddCoins();
+
+world.collidersWithAabbIntersectingAabb(
+	worldConfig.coinScoringArea.aabbCenter,
+	worldConfig.coinScoringArea.aabbHalfExtents,
+	(handle) => {
+		const parent = handle.parent();
+		if (parent) {
+			world.removeRigidBody(parent);
+		}
+		return true;
+	},
+);
 
 let lastTime = performance.now();
 let accumulator = 0;
@@ -100,3 +116,5 @@ setInterval(() => {
 		frame++;
 	}
 });
+
+console.log("world started");

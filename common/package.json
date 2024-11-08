@@ -11,6 +11,9 @@
 	"exports": {
 		".": {
 			"default": "./src/index.ts"
+		},
+		"./data": {
+			"default": "./src/data/index.ts"
 		}
 	}
 }
