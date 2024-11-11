@@ -14,7 +14,7 @@ import {
 	initWorld,
 } from "common";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
-import { getEnv } from "./env";
+import { getEnv } from "./utils/env";
 import { sql } from "drizzle-orm";
 await rapier.init();
 

@@ -1,22 +1,34 @@
 import { connect } from "@nats-io/transport-node";
 import {
-	ADD_COIN_SUBJECT,
 	NEW_COIN_SUBJECT,
 	NEW_COINS_TOPIC,
 	WORLD_HASH_TOPIC,
 	WORLD_SNAPSHOT_SUBJECT,
-	type AddCoinPacket,
-	type ClientPacket,
 	type NewCoinPacket,
 	type ServerPacket,
 	type WorldSnapshotPacket,
 	SYNC_CHECK_FRAMES,
 } from "common";
-import { getEnv } from "./env";
+import { getEnv } from "./utils/env";
+import Elysia from "elysia";
+import { drizzle } from "drizzle-orm/bun-sqlite";
+import * as schema from "./db/server/schema";
+import { auth } from "./server/auth";
+import { createPublicClient, http } from "viem";
+import { berachainTestnetbArtio } from "viem/chains";
+import { migrate } from "drizzle-orm/bun-sqlite/migrator";
+import { sql } from "drizzle-orm";
 
 const natsHostport = getEnv("NATS_HOSTPORT");
 
 const nats = await connect({ servers: natsHostport });
+
+const db = drizzle(getEnv("DB_FILE_NAME"), { schema });
+db.run(sql`PRAGMA journal_mode = WAL`);
+db.run(sql`PRAGMA synchronous = 1`);
+migrate(db, { migrationsFolder: "migrations/server" });
+
+export type ServerDB = typeof db;
 
 type Snapshot = {
 	base64Data: string | undefined;
@@ -33,6 +45,7 @@ const stagingSnapshot: Snapshot = {
 };
 
 const subscribeToWorldSnapshot = async () => {
+	if (!app.server) return;
 	const sub = nats.subscribe(WORLD_SNAPSHOT_SUBJECT);
 
 	for await (const msg of sub) {
@@ -62,11 +75,12 @@ const subscribeToWorldSnapshot = async () => {
 			frame: packet.frame,
 		};
 
-		server.publish(WORLD_HASH_TOPIC, JSON.stringify(sendPacket));
+		app.server.publish(WORLD_HASH_TOPIC, JSON.stringify(sendPacket));
 	}
 };
 
 const subscribeToNewCoins = async () => {
+	if (!app.server) return;
 	const sub = nats.subscribe(NEW_COIN_SUBJECT);
 
 	for await (const msg of sub) {
@@ -76,36 +90,12 @@ const subscribeToNewCoins = async () => {
 			kind: "new-coin",
 			frame: packet.frame,
 		};
-		server.publish(NEW_COINS_TOPIC, JSON.stringify(sendPacket));
+		app.server.publish(NEW_COINS_TOPIC, JSON.stringify(sendPacket));
 	}
 };
 
-subscribeToWorldSnapshot();
-subscribeToNewCoins();
-
-const server = Bun.serve({
-	fetch(request, server) {
-		const url = new URL(request.url);
-
-    if (url.pathname.startsWith("/auth")) {}
-
-		if (url.pathname === "/world") {
-			if (!activeSnapshot.base64Data) {
-				return new Response("Game world not ready", { status: 503 });
-			}
-
-			if (server.upgrade(request)) return;
-
-			return new Response("Websocket upgrade failed", { status: 500 });
-		}
-
-    if (url.pathname === "/coins" && request.method === "POST") {
-      
-    }
-
-		return new Response("Not Found", { status: 404 });
-	},
-	websocket: {
+const app = new Elysia()
+	.ws("/world", {
 		open(ws) {
 			if (!activeSnapshot.base64Data) {
 				const packet: ServerPacket = {
@@ -124,31 +114,22 @@ const server = Bun.serve({
 			};
 			ws.subscribe(NEW_COINS_TOPIC);
 			ws.subscribe(WORLD_HASH_TOPIC);
-			ws.send(JSON.stringify(packet), true);
+			ws.send(JSON.stringify(packet));
 		},
-		message(ws, message) {
-			// if (message instanceof Buffer) {
-			// 	const packet: ServerPacket = {
-			// 		kind: "error",
-			// 		message: "Invalid packet",
-			// 	};
-			// 	ws.send(JSON.stringify(packet));
-			// 	return;
-			// }
-			// const packet: ClientPacket = JSON.parse(message);
-			// if (packet.kind === "add-coin") {
-			// 	const packet: AddCoinPacket = {
-			// 		sender: ws.data.user.address,
-			// 	};
-			// 	nats.publish(ADD_COIN_SUBJECT, JSON.stringify(packet));
-			// }
-		},
-		close(ws) {
-			ws.unsubscribe(NEW_COINS_TOPIC);
-			ws.unsubscribe(WORLD_HASH_TOPIC);
-		},
-		perMessageDeflate: true,
-	},
-});
+	})
+	.use(
+		auth({
+			db,
+			publicClient: createPublicClient({
+				transport: http(),
+				chain: berachainTestnetbArtio,
+			}),
+		}),
+	)
+	.compile()
+	.listen(3000);
 
-console.log("Server listening on", `${server.hostname}:${server.port}`);
+subscribeToWorldSnapshot();
+subscribeToNewCoins();
+
+export type App = typeof app;

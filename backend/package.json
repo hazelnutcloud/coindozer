@@ -17,10 +17,13 @@
 	"dependencies": {
 		"@dimforge/rapier3d-compat": "^0.14.0",
 		"@nats-io/transport-node": "^3.0.0-21",
+		"@oslojs/encoding": "^1.1.0",
 		"@sinclair/typebox": "^0.33.21",
 		"common": "workspace:*",
 		"drizzle-kit": "^0.28.0",
-		"drizzle-orm": "^0.36.1"
+		"drizzle-orm": "^0.36.1",
+		"elysia": "^1.1.24",
+		"viem": "^2.21.44"
 	},
 	"scripts": {
 		"nats:start": "docker start nats || docker run --name nats -d -p 4222:4222 -p 8222:8222 nats --http_port 8222",
